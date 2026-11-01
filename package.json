@@ -1,0 +1,59 @@
+{
+  "name": "papyrus",
+  "productName": "Papyrus",
+  "version": "1.0.0",
+  "description": "Papyrus - a distraction-free writing app. Every launch is a fresh page; everything you write is kept.",
+  "main": "main.js",
+  "license": "MIT",
+  "author": {
+    "name": "Alexander Romine"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "app.papyrus.desktop",
+    "productName": "Papyrus",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "renderer.js",
+      "preload.js",
+      "slate-http.js",
+      "font-name.js",
+      "index.html",
+      "style.css",
+      "icon.ico",
+      "icon-shortcut.ico"
+    ],
+    "win": {
+      "icon": "icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Papyrus",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Papyrus-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "Papyrus-Portable-${version}.exe"
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

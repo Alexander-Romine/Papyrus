@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:" />
+  <title>Papyrus</title>
+  <link rel="icon" href="icon.ico?v=20261026">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Chrome stays hidden until you move the mouse -->
+  <header id="topbar">
+    <div class="tb-group">
+      <button id="btn-notes" class="ghost icon-only" title="Search your notes (Ctrl+P)">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path d="M2.5 3.5h11M2.5 8h11M2.5 12.5h7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button id="btn-new" class="ghost icon-only accent" title="New page (Ctrl+N)">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path d="M8 3.2v9.6M3.2 8h9.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button id="btn-settings" class="ghost icon-only subtle" title="Settings (Ctrl+,)">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="wrap">
+    <textarea
+      id="editor"
+      spellcheck="true"
+      autocomplete="off"
+      autocapitalize="sentences"
+      placeholder="Start writing…"
+      aria-label="Note"
+    ></textarea>
+    <div id="img-layer" aria-hidden="true"></div>
+    <div id="link-layer" aria-hidden="true"></div>
+  </main>
+
+  <footer id="status">
+    <span id="counts"></span>
+    <span id="saved-flag" class="saved-flag" aria-live="polite"></span>
+  </footer>
+
+  <div id="toast" role="status"></div>
+  <div id="link-tip" aria-hidden="true"></div>
+
+  <!-- Quick switcher: search everything you've ever written -->
+  <div id="switcher" class="overlay" aria-hidden="true">
+    <div class="panel" role="dialog" aria-label="Search notes">
+      <input id="search" type="text" placeholder="Search everything you've written…" autocomplete="off" spellcheck="false" />
+      <div class="sw-body">
+        <ul id="results"></ul>
+        <div id="preview" aria-hidden="true"></div>
+      </div>
+      <div class="hint">
+        <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+        <span><kbd>Enter</kbd> open</span>
+        <span><kbd>Ctrl</kbd><kbd>D</kbd> pin</span>
+        <span><kbd>Del</kbd> trash</span>
+        <span><kbd>Esc</kbd> close</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings: themes + where notes are saved -->
+  <div id="settings" class="overlay" aria-hidden="true">
+    <div class="panel settings-panel" role="dialog" aria-label="Settings" tabindex="-1">
+      <div class="settings-head">
+        <h2>Settings</h2>
+        <button id="settings-close" class="ghost icon-only" title="Close (Esc)">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <section>
+        <h3>Theme</h3>
+        <div id="theme-grid" class="theme-grid"></div>
+      </section>
+
+      <section>
+        <h3>Font</h3>
+        <div id="font-grid" class="font-grid"></div>
+        <div class="font-tools">
+          <input id="custom-font" class="custom-font" placeholder="Type any font name…" spellcheck="false" autocomplete="off">
+          <button id="btn-import-font" class="pill" title="Load a .ttf, .otf or .woff font file">Import…</button>
+          <span class="size-stepper">
+            <button id="btn-size-down" class="step" title="Smaller">A−</button>
+            <input id="size-value" class="size-value" type="text" inputmode="numeric" value="18" aria-label="Font size" autocomplete="off" spellcheck="false">
+            <button id="btn-size-up" class="step" title="Bigger">A+</button>
+          </span>
+        </div>
+        <div class="font-tools spacing-row">
+          <span class="tool-label">Line spacing</span>
+          <span class="size-stepper">
+            <button id="btn-spacing-down" class="step" title="Tighter">−</button>
+            <input id="spacing-value" class="size-value" type="text" inputmode="decimal" value="1.5" aria-label="Line spacing" autocomplete="off" spellcheck="false">
+            <button id="btn-spacing-up" class="step" title="Looser">+</button>
+          </span>
+        </div>
+      </section>
+
+      <section>
+        <h3>On launch</h3>
+        <div class="folder-row">
+          <button id="startup-toggle" class="switch" role="switch" aria-checked="true" aria-label="Reopen the last note on launch"><span class="knob"></span></button>
+          <span id="startup-label" class="toggle-label">Reopen the last note</span>
+        </div>
+      </section>
+
+      <section>
+        <h3>Notes folder</h3>
+        <div id="folder-path" class="folder-path"></div>
+        <div class="folder-row">
+          <button id="btn-choose-folder" class="pill">Choose folder…</button>
+          <button id="btn-open-folder" class="pill">Open folder</button>
+          <span id="folder-meta" class="folder-meta"></span>
+        </div>
+      </section>
+
+      <section>
+        <h3>Use in a browser</h3>
+        <div class="folder-row">
+          <code id="browser-url" class="browser-url"></code>
+          <button id="btn-open-browser" class="pill">Open in browser</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>Shortcuts</h3>
+        <div class="sc-grid">
+          <div class="sc"><span class="keys"><kbd>Ctrl</kbd><kbd>N</kbd></span><span>New page</span></div>
+          <div class="sc"><span class="keys"><kbd>Ctrl</kbd><kbd>P</kbd></span><span>Search notes</span></div>
+          <div class="sc"><span class="keys"><kbd>Ctrl</kbd><kbd>S</kbd></span><span>Save now</span></div>
+          <div class="sc"><span class="keys"><kbd>Ctrl</kbd><kbd>,</kbd></span><span>Settings</span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="slate-http.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
