@@ -5,6 +5,8 @@ you open it (or hit `Ctrl+N`), you get one blank page and a cursor. Nothing to n
 nothing to file. The moment you stop typing, the note is saved to disk as a plain
 `.txt` file, so your words outlive the app itself.
 
+![Papyrus screenshot](screenshot.png)
+
 ## Install
 
 Download from the [Releases page](../../releases):
@@ -95,6 +97,12 @@ Everything is stored locally as plain text. No accounts, no network.
 - `%APPDATA%\Papyrus\switcher.json` (search ranking, pins, startup preference)
 - Your notes folder, wherever you pointed it — including its `images` subfolder,
   where pasted screenshots live
+
+## Tech Stack
+
+- [Electron](https://www.electronjs.org/)
+- HTML, CSS and vanilla JavaScript
+- Packaged with [electron-builder](https://www.electron.build/) — NSIS installer and portable exe
 
 ## License
 
