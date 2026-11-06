@@ -388,6 +388,7 @@
   const imageMeta = new Map(); // ref -> { src?, nat?, loading?, failed? }
   const imageEls = new Map(); // "ref@@n" -> { box, img, handles, disp, cBox, … }
   let imageTimer = 0;
+  let metaTimer = 0;
   let resizeJob = null; // active corner-drag, if any
   let selectedImage = null; // the picture the user clicked, if any
   let metricsRev = 0; // bumped when font metrics change; invalidates measurement caches
@@ -1241,13 +1242,17 @@
   }
 
   // The tab and window title stay the brand — the page itself carries it and
-  // nothing here ever changes it again.
+  // nothing here ever changes it again. With a selection the numbers count
+  // only the highlighted region; a collapsed caret counts the whole note.
   function updateMeta() {
-    const text = editor.value;
-    const prose = text.trim().replace(IMAGE_RE, '');
+    const selStart = editor.selectionStart;
+    const selEnd = editor.selectionEnd;
+    const selecting = selStart !== selEnd;
+    const raw = selecting ? editor.value.slice(selStart, selEnd) : editor.value;
+    const prose = raw.trim().replace(IMAGE_RE, '');
     const words = prose ? prose.split(/\s+/).length : 0;
     counts.textContent =
-      `${words.toLocaleString()} ${words === 1 ? 'word' : 'words'} · ${text.length.toLocaleString()} characters`;
+      `${words.toLocaleString()} ${words === 1 ? 'word' : 'words'} · ${raw.length.toLocaleString()} characters`;
   }
 
   function flashSaved(explicit) {
@@ -1799,9 +1804,17 @@
 
   // Arrow keys and clicks move the caret without firing 'input'; the layer
   // must still react (a caret that lands inside the picture's lines gets
-  // steered back out on the next pass).
+  // steered back out on the next pass). The counts ride along: a drag or
+  // shift+arrow changes the highlight without an input event, and a burst
+  // of selectionchange during a drag pays one recount, not one per move.
   document.addEventListener('selectionchange', () => {
-    if (document.activeElement === editor) scheduleImages();
+    if (document.activeElement !== editor) return;
+    scheduleImages();
+    if (metaTimer) return;
+    metaTimer = setTimeout(() => {
+      metaTimer = 0;
+      updateMeta();
+    }, 16);
   });
 
   // Ctrl+V with a screenshot in the clipboard goes straight into the note.
