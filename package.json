@@ -1,7 +1,7 @@
 {
   "name": "papyrus",
   "productName": "Papyrus",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Papyrus - a distraction-free writing app. Every launch is a fresh page; everything you write is kept.",
   "main": "main.js",
   "license": "MIT",
@@ -19,6 +19,8 @@
   "build": {
     "appId": "app.papyrus.desktop",
     "productName": "Papyrus",
+    "compression": "maximum",
+    "electronLanguages": ["en-US"],
     "directories": {
       "output": "dist"
     },
@@ -30,8 +32,7 @@
       "font-name.js",
       "index.html",
       "style.css",
-      "icon.ico",
-      "icon-shortcut.ico"
+      "icon.ico"
     ],
     "win": {
       "icon": "icon.ico",
