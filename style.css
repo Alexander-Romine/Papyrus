@@ -679,6 +679,9 @@ kbd {
   gap: 8px;
   flex-wrap: wrap;
 }
+.folder-row + .folder-row {
+  margin-top: 10px;
+}
 
 .pill {
   border: 1px solid var(--line);

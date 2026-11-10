@@ -785,8 +785,9 @@
 
   // http(s) URLs get a thin hotspot over their own glyphs in a
   // pointer-events:none layer — the picture layer's mirror trick again.
-  // Hover underlines the URL and shows a tooltip; Ctrl+click opens it.
-  // Nothing intercepts plain clicks, drags or the caret: those stay native.
+  // Hover underlines the URL and shows a tooltip; a plain click opens it
+  // (drag-to-select is guarded so a selection ending on a link stays a
+  // selection). The layer itself never intercepts drags or the caret.
   const LINK_RE = /https?:\/\/[^\s<>"'`]+/g;
   const linkLayer = $('link-layer');
   const linkTip = $('link-tip'); // lives in index.html
@@ -926,8 +927,8 @@
     return null;
   }
 
-  // Hover and Ctrl+click are hit-tested against the measured rects; the
-  // layer itself never sees a pointer event, so editing stays untouched.
+  // Hover and click are hit-tested against the measured rects; the layer
+  // itself never sees a pointer event, so editing stays untouched.
   window.addEventListener('mousemove', (e) => {
     if (!linkEls.size) {
       if (linkHover) setLinkHover(null);
@@ -942,9 +943,26 @@
     linkTip.style.top = `${Math.min(e.clientY + 18, window.innerHeight - tr.height - 8)}px`;
   });
 
+  // Where a press began, so a drag to select text that happens to end on a
+  // link is still a selection — only a still click opens the URL.
+  let linkDown = null;
+  window.addEventListener('mousedown', (e) => {
+    linkDown = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
+  });
+  window.addEventListener('blur', () => {
+    linkDown = null;
+  });
+
   document.addEventListener('click', (e) => {
-    if (!e.ctrlKey && !e.metaKey) return;
     if (!linkEls.size) return;
+    if (e.detail > 1) return; // double-click keeps its word-select meaning
+    if (linkDown) {
+      const dx = e.clientX - linkDown.x;
+      const dy = e.clientY - linkDown.y;
+      if (dx * dx + dy * dy > 25) return; // moved = a drag, not a click
+    } else if (!e.ctrlKey && !e.metaKey) {
+      return; // no press seen in this window: only the legacy modifier opens
+    }
     const wr = wrapEl.getBoundingClientRect();
     const entry = linkAt(e.clientX - wr.left, e.clientY - wr.top);
     if (!entry) return;
@@ -1612,7 +1630,8 @@
   /* ------------------------------ settings ------------------------------ */
 
   function refreshSettingsInfo() {
-    window.slate.getSettings().then(({ notesDir, browserUrl, font, fontSize, lineSpacing, importedFonts: imported }) => {
+    window.slate.getSettings().then(({ notesDir, browserUrl, font, fontSize, lineSpacing, importedFonts: imported, launchOnStartup }) => {
+      paintAutostart(launchOnStartup);
       folderPathEl.textContent = notesDir;
       folderPathEl.title = notesDir;
       if (browserUrlEl) {
@@ -1965,6 +1984,21 @@
     window.slate.setStartup(next);
   });
   switcherState().then((st) => paintStartup(st.startup));
+
+  // Launch-on-startup switch: starts Papyrus in the background at sign-in
+  // (tray + localhost server, no window). Stored in settings.json like the
+  // other prefs; main.js applies it to the OS login item, so the toggle
+  // works the same from the desktop window and from a browser tab.
+  const autostartSwitch = $('autostart-toggle');
+  function paintAutostart(on) {
+    autostartSwitch.setAttribute('aria-checked', String(!!on));
+  }
+  on(autostartSwitch, 'click', () => {
+    const next = autostartSwitch.getAttribute('aria-checked') !== 'true';
+    paintAutostart(next);
+    window.slate.setPrefs({ launchOnStartup: next });
+  });
+  window.slate.getSettings().then((s) => paintAutostart(s.launchOnStartup));
 
   // Font family and size for the editor, stored with the other prefs so
   // the desktop window and every browser tab share them. Imported font

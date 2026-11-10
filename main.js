@@ -101,9 +101,10 @@ function loadSettings() {
             (f) => f && typeof f.family === 'string' && typeof f.file === 'string' && FONT_FILE_RE.test(f.file)
           )
         : [],
+      launchOnStartup: s.launchOnStartup === true,
     };
   } catch {
-    return { notesDir: DEFAULT_NOTES_DIR, legacyDirs: [], theme: null, font: null, fontSize: null, lineSpacing: null, importedFonts: [] };
+    return { notesDir: DEFAULT_NOTES_DIR, legacyDirs: [], theme: null, font: null, fontSize: null, lineSpacing: null, importedFonts: [], launchOnStartup: false };
   }
 }
 
@@ -115,6 +116,24 @@ function saveSettings() {
   }
 }
 
+// Launch-on-startup: register or remove Papyrus as a login item (HKCU Run).
+// The registered command carries --background-start, so a sign-in launch
+// brings up the tray and the localhost server without popping a window.
+// Called on every boot too, which keeps the registry in step with
+// settings.json (and heals the entry after a reinstall moves the exe).
+function applyLaunchOnStartup() {
+  try {
+    const on = settings.launchOnStartup === true;
+    app.setLoginItemSettings({
+      openAtLogin: on,
+      path: process.execPath,
+      args: on ? ['--background-start'] : [],
+    });
+  } catch (err) {
+    console.error('login item update failed:', err);
+  }
+}
+
 // Small UI prefs (currently just the theme) live in settings.json so the
 // desktop window and every browser tab start out looking the same.
 function setPrefs(partial) {
@@ -122,6 +141,11 @@ function setPrefs(partial) {
   if (partial && typeof partial === 'object') {
     if (typeof partial.theme === 'string' && partial.theme && partial.theme !== settings.theme) {
       settings.theme = partial.theme;
+      changed = true;
+    }
+    if (typeof partial.launchOnStartup === 'boolean' && partial.launchOnStartup !== settings.launchOnStartup) {
+      settings.launchOnStartup = partial.launchOnStartup;
+      applyLaunchOnStartup();
       changed = true;
     }
     const font = asFont(partial.font);
@@ -178,6 +202,7 @@ const settingsSnapshot = () => ({
   fontSize: settings.fontSize || null,
   lineSpacing: settings.lineSpacing || null,
   importedFonts: settings.importedFonts || [],
+  launchOnStartup: settings.launchOnStartup === true,
   browserUrl,
 });
 
@@ -814,8 +839,11 @@ function saveWindowState() {
 }
 
 // --open-to-browser starts with the window hidden; the browser shortcut uses
-// this so only the tab opens. The tray or any normal shortcut click shows it.
-const hideOnLaunch = process.argv.includes('--open-to-browser');
+// this so only the tab opens. --background-start is the same hidden start for
+// a login-item launch: the tray and the localhost server come up, no window.
+// The tray or any normal shortcut click shows it.
+const hideOnLaunch =
+  process.argv.includes('--open-to-browser') || process.argv.includes('--background-start');
 
 function createWindow() {
   const s = loadWindowState();
@@ -1121,6 +1149,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     app.setAppUserModelId('com.papyrus.app');
     Menu.setApplicationMenu(null);
+    applyLaunchOnStartup(); // keep the OS login item in step with settings.json
     ensureNotesDir();
     purgeTrash();
     migrateToTxt();
