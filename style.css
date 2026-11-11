@@ -11,6 +11,7 @@
   --sel: rgba(0, 0, 0, 0.18);
   --caret: #111111;
   --accent: #333333;
+  --link: #0000ee;
   --mark: rgba(0, 0, 0, 0.14);
   --toast-bg: #141414;
   --toast-fg: #ffffff;
@@ -29,6 +30,7 @@
     --sel: rgba(255, 255, 255, 0.20);
     --caret: #ffffff;
     --accent: #f0f0f0;
+    --link: #8ab4f8;
     --mark: rgba(255, 255, 255, 0.18);
     --toast-bg: #242424;
     --toast-fg: #eeeeee;
@@ -246,9 +248,10 @@ body.resizing {
 /* ------------------------------ links ------------------------------ */
 
 /* A mirror of http(s) URLs in the text, drawn over their own glyphs like
-   the picture layer. pointer-events:none: hovering and Ctrl+click are
+   the picture layer. pointer-events:none: hovering and clicking are
    hit-tested against the measured rects, so the textarea underneath keeps
-   every native caret, selection and drag behavior. */
+   every native caret, selection and drag behavior. Each band also repaints
+   the URL's own substring in classic link blue (see .note-link below). */
 #link-layer {
   position: absolute;
   left: 0;
@@ -259,11 +262,19 @@ body.resizing {
   z-index: 2;
 }
 
+/* The band paints the URL blue over a page-coloured background that hides
+   the textarea's black original, and underlines it with its bottom edge.
+   .editing steps aside — the native caret and selection win whenever the
+   caret sits inside the URL (after typing) or a selection covers it. */
 .note-link {
   position: absolute;
   box-sizing: border-box;
-  border-bottom: 1.5px solid transparent;
+  background: var(--bg);
+  color: var(--link);
+  border-bottom: 1.5px solid var(--link);
 }
+
+.note-link.editing { visibility: hidden; }
 
 .note-link.hover { border-bottom-color: var(--accent); }
 

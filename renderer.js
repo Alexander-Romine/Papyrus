@@ -50,6 +50,7 @@
       '--sel': 'rgba(0, 0, 0, 0.18)',
       '--caret': '#111111',
       '--accent': '#333333',
+      '--link': '#0000ee',
       '--mark': 'rgba(0, 0, 0, 0.14)',
       '--toast-bg': '#141414',
       '--toast-fg': '#ffffff',
@@ -66,6 +67,7 @@
       '--sel': 'rgba(255, 255, 255, 0.20)',
       '--caret': '#ffffff',
       '--accent': '#f0f0f0',
+      '--link': '#8ab4f8',
       '--mark': 'rgba(255, 255, 255, 0.18)',
       '--toast-bg': '#242424',
       '--toast-fg': '#eeeeee',
@@ -82,6 +84,7 @@
       '--sel': 'rgba(146, 100, 230, 0.28)',
       '--caret': '#8b5cf6',
       '--accent': '#7547d8',
+      '--link': '#0000ee',
       '--mark': 'rgba(167, 139, 250, 0.40)',
       '--toast-bg': '#2d2450',
       '--toast-fg': '#f4f0ff',
@@ -98,6 +101,7 @@
       '--sel': 'rgba(167, 139, 250, 0.32)',
       '--caret': '#a78bfa',
       '--accent': '#b79bff',
+      '--link': '#8ab4f8',
       '--mark': 'rgba(167, 139, 250, 0.36)',
       '--toast-bg': '#2a2340',
       '--toast-fg': '#ebe6f6',
@@ -115,6 +119,7 @@
       '--sel': 'rgba(196, 138, 54, 0.32)',
       '--caret': '#a5741f',
       '--accent': '#8a6218',
+      '--link': '#0000ee',
       '--mark': 'rgba(214, 164, 74, 0.40)',
       '--toast-bg': '#3b3226',
       '--toast-fg': '#f6efe2',
@@ -131,6 +136,7 @@
       '--sel': 'rgba(136, 192, 208, 0.30)',
       '--caret': '#88c0d0',
       '--accent': '#88c0d0',
+      '--link': '#8ab4f8',
       '--mark': 'rgba(136, 192, 208, 0.40)',
       '--toast-bg': '#434c5e',
       '--toast-fg': '#eceff4',
@@ -785,14 +791,79 @@
 
   // http(s) URLs get a thin hotspot over their own glyphs in a
   // pointer-events:none layer — the picture layer's mirror trick again.
-  // Hover underlines the URL and shows a tooltip; a plain click opens it
-  // (drag-to-select is guarded so a selection ending on a link stays a
-  // selection). The layer itself never intercepts drags or the caret.
+  // Each band repaints its substring in classic link blue, underlined;
+  // hover shows the tooltip, a plain click opens it (drag-to-select is
+  // guarded so a selection ending on a link stays a selection). The layer
+  // itself never intercepts drags or the caret.
   const LINK_RE = /https?:\/\/[^\s<>"'`]+/g;
   const linkLayer = $('link-layer');
   const linkTip = $('link-tip'); // lives in index.html
   const linkEls = new Map(); // start offset -> { els, cs, geo, url, rects }
   let linkHover = null;
+
+  // A textarea can't colour part of its text, so each line band repaints its
+  // own URL glyphs: the hotspot divs carry the substring in the editor's own
+  // font over a page-coloured background, hiding the black original. While
+  // the caret is inside the URL after typing (or a selection covers it), the
+  // repaint is hidden so the native caret and highlight always win.
+  const REPLICA_STYLE = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle',
+    'letterSpacing', 'wordSpacing', 'lineHeight', 'textIndent', 'textTransform'];
+  let linkProbe = null;
+  let linkK = 0; // glyph-box inset from the line band's top (half-leading)
+  let linkKRev = -1;
+  let linkKLh = 0;
+  let linkEditArmed = false; // set by 'input'; consumed by the next pass
+
+  // Measure the inset once per font/size/spacing change: line-height leads
+  // the glyph box, and every band's top is nudged by this much so the
+  // repaint lands exactly on the original glyphs.
+  function linkGlyphInset(edCs, lh) {
+    if (linkKRev === metricsRev && linkKLh === lh) return linkK;
+    if (!linkProbe) {
+      linkProbe = document.createElement('div');
+      linkProbe.setAttribute('aria-hidden', 'true');
+      const span = document.createElement('span');
+      span.textContent = 'Xg';
+      linkProbe.appendChild(span);
+      linkProbe.style.cssText =
+        'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;white-space:pre;';
+      document.body.appendChild(linkProbe);
+    }
+    for (const p of REPLICA_STYLE) linkProbe.style[p] = edCs[p];
+    const pr = linkProbe.getBoundingClientRect();
+    const sr = linkProbe.firstChild.getBoundingClientRect();
+    linkK = sr.top - pr.top;
+    linkKRev = metricsRev;
+    linkKLh = lh;
+    return linkK;
+  }
+
+  // The image layer's mirror only carries the text BEFORE the caret, and a
+  // caret probe inside the URL (head + marker + tail) splits the URL into
+  // two pieces that each wrap differently than the intact text the textarea
+  // renders. The link pass measures in ONE mirror carrying the full,
+  // unsplit document as plain textnodes — the URL lays out exactly as it
+  // does in the textarea, wrap point included.
+  let lmEl = null;
+  let lmHead = null;
+  let lmUrl = null;
+  let lmTail = null;
+
+  function syncLinkMirror(cs) {
+    if (!lmEl) {
+      lmEl = document.createElement('div');
+      lmEl.setAttribute('aria-hidden', 'true');
+      lmEl.style.cssText =
+        'position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;white-space:pre-wrap;';
+      lmHead = document.createTextNode('');
+      lmUrl = document.createTextNode('');
+      lmTail = document.createTextNode('');
+      lmEl.append(lmHead, lmUrl, lmTail);
+      document.body.appendChild(lmEl);
+    }
+    for (const p of MIRROR_STYLE) lmEl.style[p] = cs[p];
+    lmEl.style.width = `${editor.clientWidth}px`;
+  }
 
   // Trailing punctuation belongs to the sentence, not the link — except a
   // ")" closing a "(" inside the URL (wiki style), which the URL keeps.
@@ -811,25 +882,36 @@
   }
 
   // One rectangle per visual line: a long URL wraps, and each line's band
-  // must sit exactly over that line's own text.
-  function linkLineSpans(start, end, edW) {
+  // must sit exactly over that line's own text. Bands come from Range rects
+  // over the URL's own textnode (one rect per line the range covers); a
+  // binary search finds where each line ends — the char range the band's
+  // repaint slices. Rects never mutate the mirror, so the layout the search
+  // sees is the textarea's layout, wrap point included.
+  function linkLineSpans(start, end, text) {
+    lmHead.nodeValue = text.slice(0, start);
+    lmUrl.nodeValue = text.slice(start, end);
+    lmTail.nodeValue = text.slice(end);
+    const mr = lmEl.getBoundingClientRect();
+    const len = end - start;
+    const range = document.createRange();
+    range.setStart(lmUrl, 0);
     const spans = [];
-    let s = start;
-    let top = offsetToXY(s).top;
-    while (s < end) {
-      let lo = s + 1; // first offset on the next line, or end
-      let hi = end;
+    let pos = 0;
+    while (pos < len) {
+      // Largest e such that [pos, e) still sits on one visual line.
+      let lo = pos + 1;
+      let hi = len;
       while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (offsetToXY(mid).top <= top) lo = mid + 1;
-        else hi = mid;
+        const mid = (lo + hi + 1) >> 1;
+        range.setEnd(lmUrl, mid);
+        if (range.getClientRects().length === 1) lo = mid;
+        else hi = mid - 1;
       }
-      const p = offsetToXY(s);
-      const at = offsetToXY(lo); // past the URL, or its next line's start
-      const width = lo >= end && at.top === top ? at.left - p.left : edW - p.left;
-      spans.push({ left: p.left, top, width: Math.max(6, width) });
-      s = lo;
-      if (s < end) top = offsetToXY(s).top;
+      range.setEnd(lmUrl, lo);
+      const r = range.getClientRects()[0];
+      spans.push({ left: r.left - mr.left, top: r.top - mr.top,
+        width: Math.max(6, r.width), from: start + pos, to: start + lo });
+      pos = lo;
     }
     return spans;
   }
@@ -840,11 +922,17 @@
     const matches = text.includes('http') ? [...text.matchAll(LINK_RE)] : [];
     const seen = new Set();
     const staged = []; // measured entries — one write pass afterwards
+    let edCs = null; // editor's own metrics, copied onto every repaint
+    let k = 0; // glyph-box inset for this pass
+    let lh = 0;
 
     if (matches.length) {
       const wrapR = wrapEl.getBoundingClientRect();
       const edR = editor.getBoundingClientRect();
-      const lh = syncMirror();
+      lh = syncMirror();
+      edCs = getComputedStyle(editor);
+      syncLinkMirror(edCs);
+      k = linkGlyphInset(edCs, lh);
       const offX = edR.left - wrapR.left;
       const offY = edR.top - wrapR.top;
 
@@ -858,6 +946,7 @@
           entry = { els: [], cs: [], geo: null, url, rects: [] };
           linkEls.set(start, entry);
         }
+        entry.start = start;
         entry.url = url;
 
         // The picture layer's cache trick: geometry depends only on the
@@ -865,7 +954,7 @@
         const head = text.slice(0, end);
         let geo = entry.geo;
         if (!geo || geo.head !== head || geo.w !== edR.width || geo.lh !== lh || geo.rev !== metricsRev) {
-          geo = { head, w: edR.width, lh, rev: metricsRev, spans: linkLineSpans(start, end, edR.width) };
+          geo = { head, w: edR.width, lh, rev: metricsRev, spans: linkLineSpans(start, end, text) };
           entry.geo = geo;
         }
         entry.rects = geo.spans.map((s) => ({ x: offX + s.left, y: offY + s.top, w: s.width, h: lh }));
@@ -873,21 +962,52 @@
       }
     }
 
+    // Native editing wins: a selection covering a URL drops its repaint, and
+    // a caret that lands inside a URL while typing (armed by 'input') keeps
+    // it dropped until the caret leaves — so a later plain caret move or an
+    // open click never flickers, and typing inside the URL stays native.
+    const selA = editor.selectionStart;
+    const selB = editor.selectionEnd;
+    const armed = linkEditArmed;
+    linkEditArmed = false;
+
     for (const entry of staged) {
+      const endO = entry.start + entry.url.length;
+      const inside = selA === selB && selA >= entry.start && selA <= endO;
+      if (inside && armed) entry.editArmed = true;
+      else if (!inside) entry.editArmed = false;
+      const hide = (selA !== selB && selA < endO && selB > entry.start) || entry.editArmed === true;
+      if (entry.hide !== hide) {
+        entry.hide = hide;
+        for (const el of entry.els) el.classList.toggle('editing', hide);
+      }
+
       entry.rects.forEach((r, i) => {
         if (!entry.els[i]) {
           const el = document.createElement('div');
-          el.className = 'note-link';
+          // entry.hide is computed before the els exist, so a link born
+          // hidden must carry the class from the start — later passes see
+          // an unchanged hide and never toggle it on.
+          el.className = entry.hide ? 'note-link editing' : 'note-link';
           entry.els[i] = el;
           entry.cs[i] = {};
           linkLayer.appendChild(el);
         }
+        const el = entry.els[i];
         const c = entry.cs[i];
-        putStyle(entry.els[i], c, 'display', '');
-        putStyle(entry.els[i], c, 'left', `${r.x}px`);
-        putStyle(entry.els[i], c, 'top', `${r.y}px`);
-        putStyle(entry.els[i], c, 'width', `${r.w}px`);
-        putStyle(entry.els[i], c, 'height', `${r.h}px`);
+        // The repaint itself: the URL's own substring in the editor's font,
+        // pushed up by the measured inset so its glyphs land on the originals.
+        const span = entry.geo.spans[i];
+        const sub = text.slice(span.from, span.to);
+        if (el.textContent !== sub) el.textContent = sub;
+        for (const p of REPLICA_STYLE) putStyle(el, c, p, edCs[p]);
+        putStyle(el, c, 'whiteSpace', 'pre');
+        putStyle(el, c, 'overflow', 'hidden');
+        putStyle(el, c, 'display', '');
+        putStyle(el, c, 'left', `${r.x}px`);
+        putStyle(el, c, 'top', `${r.y - k}px`);
+        putStyle(el, c, 'width', `${r.w}px`);
+        putStyle(el, c, 'height', `${r.h}px`);
       });
       // Fewer wrapped lines than last pass — park the spares.
       for (let i = entry.rects.length; i < entry.els.length; i++) {
@@ -1688,6 +1808,7 @@
     holdViewForTyping();
     dirty = true;
     deselectImage();
+    linkEditArmed = true; // next link pass may drop the repaint for the caret
     autoGrow(); // growNow carries the counts too — once per frame
     scheduleSave();
     refreshImagesNow();
